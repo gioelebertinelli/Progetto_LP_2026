@@ -1,0 +1,21 @@
+# Lisp compiled files (varia in base al sistema operativo)
+*.fasl
+*.lib
+*.fas
+*.mem
+*.x86f
+*.lx64fsl
+*.dx64fsl
+
+# Prolog temporary files
+*.qLf
+.pl-history
+
+# Mac & Windows system garbage
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.idea/
+.vscode/
+*.swp

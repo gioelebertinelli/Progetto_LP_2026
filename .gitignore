@@ -1,4 +1,4 @@
-# Lisp compiled files (varia in base al sistema operativo)
+# Lisp compiled files
 *.fasl
 *.lib
 *.fas

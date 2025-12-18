@@ -1,0 +1,8 @@
+# Forza tutti i file di testo a usare i fine riga standard (LF)
+* text=auto eol=lf
+
+# Assicura che i file Lisp e Prolog siano trattati come testo
+*.lisp text
+*.pl text
+*.jl text
+*.txt text

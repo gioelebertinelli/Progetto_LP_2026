@@ -67,13 +67,13 @@ is_regex(Expr) :-
 
 % nfsa_compile_regex(FA_Id, RE) è vero quando RE è compilabile
 % in un automa identificato da FA_Id
-nfsa_compile_regex(Id, Re) :-
-    nfsa_delete(Id),        % Pulisce eventuali versioni precedenti
+nfsa_compile_regex(FA_Id, Re) :-
+    nfsa_delete(FA_Id),        % Pulisce eventuali versioni precedenti
     gensym(q, Start),       % Genera stato iniziale
     gensym(q, End),         % Genera stato finale
-    assertz(nfsa_initial(Id, Start)),
-    assertz(nfsa_final(Id, End)),
-    compile(Id, Re, Start, End).
+    assertz(nfsa_initial(FA_Id, Start)),
+    assertz(nfsa_final(FA_Id, End)),
+    compile(FA_Id, Re, Start, End).
 
 % --- 5. MOTORE DI COMPILAZIONE (Costruzione di Thompson) ---
 
@@ -170,11 +170,11 @@ compile_alt(Id, [H | T], Start, End) :-
 
 % nfsa_recognize(FA_Id, Input) è vero quando l'input è completamente
 % consumato e l'automa si trova in uno stato finale
-nfsa_recognize(Id, Input) :-
+nfsa_recognize(FA_Id, Input) :-
     is_list(Input),
-    nfsa_initial(Id, Start),
-    nfsa_final(Id, Final),
-    recognize(Id, Start, Final, Input, []).
+    nfsa_initial(FA_Id, Start),
+    nfsa_final(FA_Id, Final),
+    recognize(FA_Id, Start, Final, Input, []).
 
 % Caso base: input finito, nello stato finale
 recognize(_, Current, Final, [], _) :-
@@ -211,7 +211,7 @@ nfsa_delete_all :-
     retractall(nfsa_delta(_, _, _, _)).
 
 % Cancella un automa specifico dalla base di dati
-nfsa_delete(Id) :-
-    retractall(nfsa_initial(Id, _)),
-    retractall(nfsa_final(Id, _)),
-    retractall(nfsa_delta(Id, _, _, _)).
+nfsa_delete(FA_Id) :-
+    retractall(nfsa_initial(FA_Id, _)),
+    retractall(nfsa_final(FA_Id, _)),
+    retractall(nfsa_delta(FA_Id, _, _, _)).

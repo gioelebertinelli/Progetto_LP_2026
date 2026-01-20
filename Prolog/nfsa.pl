@@ -4,84 +4,98 @@
 
 :- use_module(library(gensym)).
 
+% ============================================================
+% 1) BASE DI DATI DINAMICA
+% ============================================================
 
-
-% --- 1. GESTIONE DELLA BASE DI DATI DINAMICA ---
-:- dynamic nfsa_initial/2.
+:- dynamic nfsa_init/2.
 :- dynamic nfsa_final/2.
 :- dynamic nfsa_delta/4.
 
-% --- 2. PREDICATI AUSILIARI ---
+% ============================================================
+% 2) PAROLE RISERVATE AGLI OPERATORI REGEX
+% ============================================================
 
-% Parole chiave riservate agli operatori
 reserved(c).
 reserved(a).
 reserved(z).
 reserved(o).
-reserved(epsilon).
 
-% --- 3. VALIDATORE (is_regex/1) ---
+% ============================================================
+% 3) VALIDATORE: is_regex/1
+% ============================================================
 
-% Caso base: simboli atomici (es. a, b, 42)
-% epsilon è riservato come metasimbolo per ε-transizioni
+is_regex(Re) :-
+    var(Re),
+    !,
+    fail.
+
+    
+% Caso base: simboli atomici (a, b, 42, epsilon, ...)
 is_regex(Re) :-
     atomic(Re),
-    Re \= epsilon,
     !.
 
-% Simbolo composto trattato come atomico (es. foo(bar))
-% purché il funtore non sia riservato
+% Simboli compound come foo(bar), zio_di(Achille), ... sono simboli validi
+% purché il funtore non sia riservato come operatore regex
 is_regex(Re) :-
     compound(Re),
     functor(Re, F, _),
     \+ reserved(F),
     !.
 
-% Operatori unari: Kleene Star
-is_regex(z(Re)) :- 
-    is_regex(Re).
+% Operatori unari
+is_regex(z(Re)) :- is_regex(Re).
+is_regex(o(Re)) :- is_regex(Re).
 
-% Operatori unari: Plus
-is_regex(o(Re)) :- 
-    is_regex(Re).
-
-% Operatori n-ari: Sequenza
+% Operatori n-ari: sequenza c(...)
 is_regex(Expr) :-
     compound(Expr),
     functor(Expr, c, N),
-    N > 0,
-    !,
+    N >= 2,
     Expr =.. [c | Args],
     maplist(is_regex, Args).
 
-% Operatori n-ari: Alternativa
+% Operatori n-ari: alternativa a(...)
 is_regex(Expr) :-
     compound(Expr),
     functor(Expr, a, N),
-    N > 0,
-    !,
+    N >= 2,
     Expr =.. [a | Args],
     maplist(is_regex, Args).
 
-% --- 4. COMPILATORE (nfsa_compile_regex/2) ---
+% ============================================================
+% 4) COMPILATORE: nfsa_compile_regex/2
+% ============================================================
 
 % nfsa_compile_regex(FA_Id, RE) è vero quando RE è compilabile
 % in un automa identificato da FA_Id
 nfsa_compile_regex(FA_Id, Re) :-
-    nfsa_delete(FA_Id),        % Pulisce eventuali versioni precedenti
-    gensym(q, Start),       % Genera stato iniziale
-    gensym(q, End),         % Genera stato finale
-    assertz(nfsa_initial(FA_Id, Start)),
+    is_regex(Re),
+    nfsa_delete(FA_Id),
+    gensym(q, Start),
+    gensym(q, End),
+    assertz(nfsa_init(FA_Id, Start)),
     assertz(nfsa_final(FA_Id, End)),
-    compile(FA_Id, Re, Start, End).
+    (   compile(FA_Id, Re, Start, End)
+    ->  true
+    ;   nfsa_delete(FA_Id), fail
+    ).
 
-% --- 5. MOTORE DI COMPILAZIONE (Costruzione di Thompson) ---
+% ============================================================
+% 5) MOTORE DI COMPILAZIONE (Thompson)
+%
+% Convenzioni:
+% - epsilon-transition: etichetta eps (NON consuma input)
+% - transizione che consuma un simbolo X: etichetta sym(X)
+% ============================================================
+
 
 % A. Sequenza c(re1, re2, ..., ren)
 compile(Id, Term, Start, End) :-
     compound(Term),
     functor(Term, c, N),
-    N > 0,
+    N >= 2,
     !,
     Term =.. [c | Args],
     compile_seq(Id, Args, Start, End).
@@ -90,7 +104,7 @@ compile(Id, Term, Start, End) :-
 compile(Id, Term, Start, End) :-
     compound(Term),
     functor(Term, a, N),
-    N > 0,
+    N >= 2,
     !,
     Term =.. [a | Args],
     compile_alt(Id, Args, Start, End).
@@ -100,16 +114,21 @@ compile(Id, z(Re), Start, End) :-
     !,
     gensym(q, S1),
     gensym(q, E1),
-    % Percorso zero: epsilon da Start a End
-    assertz(nfsa_delta(Id, Start, epsilon, End)),
-    % Ingresso nel loop
-    assertz(nfsa_delta(Id, Start, epsilon, S1)),
-    % Corpo del loop
+
+    % 0 ripetizioni: Start -> End
+    assertz(nfsa_delta(Id, Start, eps, End)),
+
+    % entra nel loop: Start -> S1
+    assertz(nfsa_delta(Id, Start, eps, S1)),
+
+    % corpo loop
     compile(Id, Re, S1, E1),
-    % Uscita dal loop
-    assertz(nfsa_delta(Id, E1, epsilon, End)),
-    % Back-edge per ripetizione
-    assertz(nfsa_delta(Id, E1, epsilon, S1)).
+
+    % esci dal loop: E1 -> End
+    assertz(nfsa_delta(Id, E1, eps, End)),
+
+    % ripeti: E1 -> S1
+    assertz(nfsa_delta(Id, E1, eps, S1)).
 
 % D. Plus o(re) = re seguito da z(re)
 compile(Id, o(Re), Start, End) :-
@@ -118,100 +137,98 @@ compile(Id, o(Re), Start, End) :-
     compile(Id, Re, Start, Mid),
     compile(Id, z(Re), Mid, End).
 
-% E. Simbolo atomico
+% E. Simbolo atomico (consuma input)
 compile(Id, Sym, Start, End) :-
     atomic(Sym),
-    Sym \= epsilon,
     !,
-    assertz(nfsa_delta(Id, Start, Sym, End)).
+    assertz(nfsa_delta(Id, Start, sym(Sym), End)).
 
-% F. Simbolo compound (es. foo(bar))
+% F. Simbolo compound non riservato (consuma input)
 compile(Id, Sym, Start, End) :-
     compound(Sym),
     functor(Sym, F, _),
     \+ reserved(F),
     !,
-    assertz(nfsa_delta(Id, Start, Sym, End)).
+    assertz(nfsa_delta(Id, Start, sym(Sym), End)).
 
-% --- 6. PREDICATI DI SUPPORTO PER COMPILAZIONE ---
+% ============================================================
+% 6) SUPPORTO COMPILAZIONE: sequenza e alternativa
+% ============================================================
 
-% Compilazione di sequenza: caso base (ultimo elemento)
+% Sequenza: caso base (un solo elemento)
 compile_seq(Id, [Last], Start, End) :-
     !,
     compile(Id, Last, Start, End).
 
-% Compilazione di sequenza: caso ricorsivo
+% Sequenza: caso ricorsivo
 compile_seq(Id, [H | T], Start, End) :-
     gensym(q, Mid),
     compile(Id, H, Start, Mid),
     compile_seq(Id, T, Mid, End).
 
-% Compilazione di alternativa: caso base (ultimo elemento)
+% Alternativa: caso base (una sola alternativa)
 compile_alt(Id, [H], Start, End) :-
     !,
     gensym(q, S1),
     gensym(q, E1),
-    assertz(nfsa_delta(Id, Start, epsilon, S1)),
+    assertz(nfsa_delta(Id, Start, eps, S1)),
     compile(Id, H, S1, E1),
-    assertz(nfsa_delta(Id, E1, epsilon, End)).
+    assertz(nfsa_delta(Id, E1, eps, End)).
 
-% Compilazione di alternativa: caso ricorsivo
+% Alternativa: caso ricorsivo
 compile_alt(Id, [H | T], Start, End) :-
     gensym(q, S1),
     gensym(q, E1),
-    % Branch per opzione corrente
-    assertz(nfsa_delta(Id, Start, epsilon, S1)),
+    assertz(nfsa_delta(Id, Start, eps, S1)),
     compile(Id, H, S1, E1),
-    assertz(nfsa_delta(Id, E1, epsilon, End)),
-    % Ricorsione sulle altre alternative
+    assertz(nfsa_delta(Id, E1, eps, End)),
     compile_alt(Id, T, Start, End).
 
-% --- 7. RICONOSCITORE (nfsa_recognize/2) ---
+% ============================================================
+% 7) RICONOSCITORE: nfsa_recognize/2
+% ============================================================
 
 % nfsa_recognize(FA_Id, Input) è vero quando l'input è completamente
-% consumato e l'automa si trova in uno stato finale
+% consumato e l'automa può arrivare in UNO stato finale
 nfsa_recognize(FA_Id, Input) :-
     is_list(Input),
-    nfsa_initial(FA_Id, Start),
-    nfsa_final(FA_Id, Final),
-    recognize(FA_Id, Start, Final, Input, []).
+    nfsa_init(FA_Id, Start),
+    recognize(FA_Id, Start, Input, []).
 
-% Caso base: input finito, nello stato finale
-recognize(_, Current, Final, [], _) :-
-    Current = Final,
+% Se input è finito: accetta se Current è finale
+recognize(Id, Current, [], _) :-
+    nfsa_final(Id, Current),
     !.
 
-% Caso base: input finito, non nello stato finale
-% Prova epsilon-transizioni verso il finale
-recognize(Id, Current, Final, [], Visited) :-
-    nfsa_delta(Id, Current, epsilon, Next),
+% Se input è finito: prova ancora epsilon-transizioni verso un finale
+recognize(Id, Current, [], Visited) :-
+    nfsa_delta(Id, Current, eps, Next),
     \+ memberchk(Next-[], Visited),
-    recognize(Id, Next, Final, [], [Next-[] | Visited]).
+    recognize(Id, Next, [], [Next-[] | Visited]).
 
-% Consumo di un simbolo
-recognize(Id, Current, Final, [Sym | Rest], _) :-
-    nfsa_delta(Id, Current, Sym, Next),
-    Sym \= epsilon,
-    recognize(Id, Next, Final, Rest, []).
+% Consumo di un simbolo (transizione etichettata sym(Sym))
+recognize(Id, Current, [Sym | Rest], _) :-
+    nfsa_delta(Id, Current, sym(Sym), Next),
+    recognize(Id, Next, Rest, []).
 
 % Epsilon-transizione senza consumare input
-% (solo quando c'è ancora input da processare)
-recognize(Id, Current, Final, Input, Visited) :-
-    Input \= [],
-    nfsa_delta(Id, Current, epsilon, Next),
+recognize(Id, Current, Input, Visited) :-
+    nfsa_delta(Id, Current, eps, Next),
     \+ memberchk(Next-Input, Visited),
-    recognize(Id, Next, Final, Input, [Next-Input | Visited]).
+    recognize(Id, Next, Input, [Next-Input | Visited]).
 
-% --- 8. GESTIONE DELLA BASE DI DATI ---
+% ============================================================
+% 8) DELETE
+% ============================================================
 
 % Cancella tutti gli automi dalla base di dati
 nfsa_delete_all :-
-    retractall(nfsa_initial(_, _)),
+    retractall(nfsa_init(_, _)),
     retractall(nfsa_final(_, _)),
     retractall(nfsa_delta(_, _, _, _)).
 
 % Cancella un automa specifico dalla base di dati
 nfsa_delete(FA_Id) :-
-    retractall(nfsa_initial(FA_Id, _)),
+    retractall(nfsa_init(FA_Id, _)),
     retractall(nfsa_final(FA_Id, _)),
     retractall(nfsa_delta(FA_Id, _, _, _)).

@@ -12,7 +12,7 @@
   
   (cond
    
-   ; Caso lista vuota: non e' una regex valida
+   ;; Caso lista vuota: non e' una regex valida
    ((null RE) nil)
    
    ;; Caso atomo: e' sempre una regex valida 

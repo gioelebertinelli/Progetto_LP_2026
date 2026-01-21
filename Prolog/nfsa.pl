@@ -5,15 +5,7 @@
 :- use_module(library(gensym)).
 
 % ============================================================
-% 1) BASE DI DATI DINAMICA
-% ============================================================
-
-:- dynamic nfsa_init/2.
-:- dynamic nfsa_final/2.
-:- dynamic nfsa_delta/4.
-
-% ============================================================
-% 2) PAROLE RISERVATE AGLI OPERATORI REGEX
+% 0) FUNZIONI DI SUPPORTO
 % ============================================================
 
 reserved(c).
@@ -22,31 +14,33 @@ reserved(z).
 reserved(o).
 
 % ============================================================
+% 1) BASE DI DATI DINAMICA
+% ============================================================
+
+:- dynamic nfsa_init/2.
+:- dynamic nfsa_final/2.
+:- dynamic nfsa_delta/4.
+
+% ============================================================
 % 3) VALIDATORE: is_regex/1
 % ============================================================
 
+% Variabili non ammesse
 is_regex(Re) :-
     var(Re),
     !,
     fail.
 
-    
 % Caso base: simboli atomici (a, b, 42, epsilon, ...)
 is_regex(Re) :-
-    atomic(Re),
-    !.
-
-% Simboli compound come foo(bar), zio_di(Achille), ... sono simboli validi
-% purché il funtore non sia riservato come operatore regex
-is_regex(Re) :-
-    compound(Re),
-    functor(Re, F, _),
-    \+ reserved(F),
-    !.
+    atomic(Re).
 
 % Operatori unari
-is_regex(z(Re)) :- is_regex(Re).
-is_regex(o(Re)) :- is_regex(Re).
+is_regex(z(Re)) :-
+    is_regex(Re).
+
+is_regex(o(Re)) :-
+    is_regex(Re).
 
 % Operatori n-ari: sequenza c(...)
 is_regex(Expr) :-
@@ -64,13 +58,19 @@ is_regex(Expr) :-
     Expr =.. [a | Args],
     maplist(is_regex, Args).
 
+% Simboli compound come foo(bar), zio_di(Achille), ... sono simboli validi
+% purché il funtore non sia riservato come operatore regex
+is_regex(Re) :-
+    compound(Re),
+    functor(Re, F, _),
+    \+ reserved(F).
+
 % ============================================================
-% 4) COMPILATORE: nfsa_compile_regex/2
+% 4) COMPILAZIONE REGEX -> NFSA (Thompson)
 % ============================================================
 
-% nfsa_compile_regex(FA_Id, RE) è vero quando RE è compilabile
-% in un automa identificato da FA_Id
 nfsa_compile_regex(FA_Id, Re) :-
+    ground(FA_Id),
     is_regex(Re),
     nfsa_delete(FA_Id),
     gensym(q, Start),
@@ -90,13 +90,11 @@ nfsa_compile_regex(FA_Id, Re) :-
 % - transizione che consuma un simbolo X: etichetta sym(X)
 % ============================================================
 
-
 % A. Sequenza c(re1, re2, ..., ren)
 compile(Id, Term, Start, End) :-
     compound(Term),
     functor(Term, c, N),
     N >= 2,
-    !,
     Term =.. [c | Args],
     compile_seq(Id, Args, Start, End).
 
@@ -105,13 +103,11 @@ compile(Id, Term, Start, End) :-
     compound(Term),
     functor(Term, a, N),
     N >= 2,
-    !,
     Term =.. [a | Args],
     compile_alt(Id, Args, Start, End).
 
 % C. Kleene Star z(re)
 compile(Id, z(Re), Start, End) :-
-    !,
     gensym(q, S1),
     gensym(q, E1),
 
@@ -132,7 +128,6 @@ compile(Id, z(Re), Start, End) :-
 
 % D. Plus o(re) = re seguito da z(re)
 compile(Id, o(Re), Start, End) :-
-    !,
     gensym(q, Mid),
     compile(Id, Re, Start, Mid),
     compile(Id, z(Re), Mid, End).
@@ -140,7 +135,6 @@ compile(Id, o(Re), Start, End) :-
 % E. Simbolo atomico (consuma input)
 compile(Id, Sym, Start, End) :-
     atomic(Sym),
-    !,
     assertz(nfsa_delta(Id, Start, sym(Sym), End)).
 
 % F. Simbolo compound non riservato (consuma input)
@@ -148,7 +142,6 @@ compile(Id, Sym, Start, End) :-
     compound(Sym),
     functor(Sym, F, _),
     \+ reserved(F),
-    !,
     assertz(nfsa_delta(Id, Start, sym(Sym), End)).
 
 % ============================================================
@@ -157,7 +150,6 @@ compile(Id, Sym, Start, End) :-
 
 % Sequenza: caso base (un solo elemento)
 compile_seq(Id, [Last], Start, End) :-
-    !,
     compile(Id, Last, Start, End).
 
 % Sequenza: caso ricorsivo
@@ -168,7 +160,6 @@ compile_seq(Id, [H | T], Start, End) :-
 
 % Alternativa: caso base (una sola alternativa)
 compile_alt(Id, [H], Start, End) :-
-    !,
     gensym(q, S1),
     gensym(q, E1),
     assertz(nfsa_delta(Id, Start, eps, S1)),
@@ -197,31 +188,26 @@ nfsa_recognize(FA_Id, Input) :-
 
 % Se input è finito: accetta se Current è finale
 recognize(Id, Current, [], _) :-
-    nfsa_final(Id, Current),
-    !.
+    nfsa_final(Id, Current).
 
-% Se input è finito: prova ancora epsilon-transizioni verso un finale
+% Se input è finito: prova ancora epsilon-transizioni (senza cicli)
 recognize(Id, Current, [], Visited) :-
+    \+ memberchk(Current-[], Visited),
     nfsa_delta(Id, Current, eps, Next),
-    \+ memberchk(Next-[], Visited),
-    recognize(Id, Next, [], [Next-[] | Visited]).
+    recognize(Id, Next, [], [Current-[] | Visited]).
 
 % Consumo di un simbolo (transizione etichettata sym(Sym))
 recognize(Id, Current, [Sym | Rest], _) :-
     nfsa_delta(Id, Current, sym(Sym), Next),
     recognize(Id, Next, Rest, []).
 
-% Epsilon-transizione senza consumare input
+% Epsilon-transizione senza consumare input (senza cicli)
 recognize(Id, Current, Input, Visited) :-
+    \+ memberchk(Current-Input, Visited),
     nfsa_delta(Id, Current, eps, Next),
-    \+ memberchk(Next-Input, Visited),
-    recognize(Id, Next, Input, [Next-Input | Visited]).
+    recognize(Id, Next, Input, [Current-Input | Visited]).
 
-% ============================================================
-% 8) DELETE
-% ============================================================
 
-% Cancella tutti gli automi dalla base di dati
 nfsa_delete_all :-
     retractall(nfsa_init(_, _)),
     retractall(nfsa_final(_, _)),

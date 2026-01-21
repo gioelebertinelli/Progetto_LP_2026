@@ -160,11 +160,7 @@ compile_seq(Id, [H | T], Start, End) :-
 
 % Alternativa: caso base (una sola alternativa)
 compile_alt(Id, [H], Start, End) :-
-    gensym(q, S1),
-    gensym(q, E1),
-    assertz(nfsa_delta(Id, Start, eps, S1)),
-    compile(Id, H, S1, E1),
-    assertz(nfsa_delta(Id, E1, eps, End)).
+    compile(Id, H, Start, End).
 
 % Alternativa: caso ricorsivo
 compile_alt(Id, [H | T], Start, End) :-

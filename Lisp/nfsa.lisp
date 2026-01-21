@@ -2,57 +2,57 @@
 ; Gianoli	Matteo	924072
 ; Martinalli	Marco	924003
 
-;;; ----------------------------------------------------------------------------
-;;; FUNZIONE: is-regex
-;;; Controlla se l'espressione RE è una regex valida
-;;; Ritorna T se RE e' una regex valida, NIL altrimenti
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
+;;; DICHIARAZIONE FUNZIONI: per evitare warning 
+;;; (nel caso venga chiamata prima di essere letta)
+;;; ===========================================================================
+
+(declaim (ftype (function (t t t t t) t) recognize-from-state))
+(declaim (ftype (function (t t t t t) t) try-epsilon-transitions))
+(declaim (ftype (function (t t t t) t) try-symbol-transitions))
+
+;;; ===========================================================================
+;;; FUNZIONE PRINCIPALE: is_regex
+;;; Verifica se RE è una regex valida
+;;; ===========================================================================
 
 (defun is-regex (RE)
   
   (cond
    
-   ; Caso lista vuota: non e' una regex valida
    ((null RE) nil)
    
-   ;; Caso atomo: e' sempre una regex valida 
-   ;; (anche 'a, 'c, 'z, 'o quando sono usati come simboli)
+   ;; Atomo, e' sempre una regex valida (anche 'a, 'c, 'z, 'o come simboli)
    ((atom RE) t)
    
-   ;; Caso lista: controllo se l'operatore è valido
+   ;; Lista, controllo operatore
    ((listp RE)
     (cond
      
-     ;; Caso operatore 'c' (sequenza): deve avere almeno un argomento
-     ;; e tutti gli argomenti devono essere regex valide
+     ;; Operatore 'c' (sequenza): almeno un argomento, tutti regex valide
      ((eq (first RE) 'c)
       (and (>= (length (rest RE)) 1)  
            (every #'is-regex (rest RE))))
      
-     ;; Caso operatore 'a' (alternativa): deve avere almeno un argomento
-     ;; e tutti gli argomenti devono essere regex valide
+     ;; Operatore 'a' (alternativa): almeno un argomento, tutti regex valide
      ((eq (first RE) 'a)
       (and (>= (length (rest RE)) 1)
            (every #'is-regex (rest RE))))
      
-     ;; Caso operatore 'z' (chiusura di Kleene):
-     ;; deve avere esattamente un argomento che deve essere una regex valida
+     ;; Operatore 'z' (chiusura di Kleene): un argomento, regex valida
      ((eq (first RE) 'z)
       (and (= (length (rest RE)) 1)  
            (is-regex (second RE))))
      
-     ;; Caso operatore 'o' (ripetizione uno-o-piu'):
-     ;; deve avere esattamente un argomento che deve essere una regex valida
+     ;; Operatore 'o' (uno o più): un argomento, regex valida
      ((eq (first RE) 'o)
       (and (= (length (rest RE)) 1)
            (is-regex (second RE))))
      
-     ;; Se il primo elemento NON e' uno degli operatori riservati (c, a, z, o),
-     ;; allora questa e' una S-expression che rappresenta un simbolo
-     ;; dell'alfabeto e quindi e' una regex valida. Esempio: (foo bar) 
+     ;; Se non è un operatore riservato, è una S-expression
+     ;; Esempio: (foo bar)
      (t t)))
    
-   ;; Altri casi: catch-all per tipi non previsti
    (t nil)))
 
 
@@ -190,28 +190,19 @@
                      :delta (third result))))
       nil))
 
-;; Dichiarazione funzioni per evitare warning 
-;; (nel caso venga chiamata prima di essere letta)
-(declaim (ftype (function (t t t t t) t) recognize-from-state))
-(declaim (ftype (function (t t t t t) t) try-epsilon-transitions))
-(declaim (ftype (function (t t t t) t) try-symbol-transitions))
 
-;;; ----------------------------------------------------------------------------
-;;; FUNZIONE HELPER: try-epsilon-transitions
-;;; Prova tutte le epsilon-transizioni (quelle con simbolo NIL)
-;;; Non consumano input, quindi passiamo lo stesso remaining-input
-;;; Ritorna T se almeno una porta al successo, NIL altrimenti
-;;; ----------------------------------------------------------------------------
-
+;;; ===========================================================================
+;;; FUNZIONE HELPER: try-epsilon-transitions 
+;;; Prova tutte le epsilon-transizioni (simbolo NIL), non consumano input
+;;; ===========================================================================
 
 (defun try-epsilon-transitions (current-state remaining-input final-states 
                                 transitions visited-epsilon)
   
-  ;; CONTROLLO ANTI-LOOP: Se questo stato è già in visited-epsilon, FERMATI!
+  ;; Evita cicli infiniti su epsilon-transizioni
   (when (member current-state visited-epsilon)
     (return-from try-epsilon-transitions nil))
   
-  ;; Aggiungi current-state ai visitati PRIMA di esplorare
   (let ((new-visited (cons current-state visited-epsilon)))
     (some #'(lambda (trans)
               (let ((from-state (first trans))
@@ -219,107 +210,81 @@
                     (to-state (third trans)))
                 (when (and (eql from-state current-state)
                           (null symbol))
-                  ;; Passa new-visited alla chiamata ricorsiva
                   (recognize-from-state to-state remaining-input final-states 
                                       transitions new-visited))))
           transitions)))
 
-
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
 ;;; FUNZIONE HELPER: try-symbol-transitions
-;;; Prova tutte le transizioni che consumano il prossimo simbolo dell'input
-;;; Ritorna T se almeno una porta al successo, NIL altrimenti
-;;; ----------------------------------------------------------------------------
+;;; Prova transizioni che consumano il prossimo simbolo dell'input
+;;; ===========================================================================
 
 (defun try-symbol-transitions (current-state remaining-input final-states 
                                transitions)
-  (when remaining-input  ; Controllo di sicurezza
+  (when remaining-input
     (let ((next-symbol (first remaining-input))
           (rest-input (rest remaining-input)))
       
-      ;; Troviamo tutte le transizioni applicabili dallo stato corrente
+      ;; Trova tutte le transizioni applicabili dallo stato corrente
       ;; che consumano esattamente il prossimo simbolo
       (some #'(lambda (trans)
                 (let ((from-state (first trans))
                       (symbol (second trans))
                       (to-state (third trans)))
                   
-                  ;; Controlliamo se questa transizione e' applicabile:
+                  ;; Controlla se questa transizione e' applicabile:
                   ;; 1. Parte dallo stato corrente
                   ;; 2. Il simbolo corrisponde (NON e' epsilon)
                   ;; 3. Il simbolo matcha con next-symbol
                   (when (and (eql from-state current-state)
-                            (not (null symbol))  ; NON epsilon
+                            (not (null symbol)) 
                             (equal symbol next-symbol))
                     
-                    ;; Proviamo a continuare da questo nuovo stato
-                    ;; consumando il resto dell'input
-                    ;; IMPORTANTE: resettiamo visited-epsilon 
+                    ;; Reset di visited-epsilon dopo transizione simbolo
                     (recognize-from-state to-state rest-input final-states 
                                          transitions '()))))
             transitions))))
 
-
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
 ;;; FUNZIONE HELPER: recognize-from-state
 ;;; Funzione ricorsiva che esplora l'automa con backtracking
-;;; 
-;;; Parametri:
-;;;   current-state: lo stato in cui ci troviamo ora
-;;;   remaining-input: la lista di simboli ancora da consumare
-;;;   final-states: lista degli stati finali
-;;;   transitions: lista di tutte le transizioni dell'automa
-;;;
-;;; Logica:
-;;;   1. Se l'input e' finito E siamo in uno stato finale -> successo (T)
-;;;   2. Altrimenti proviamo tutte le transizioni possibili
-;;;   3. Se almeno UN percorso porta al successo -> T, altrimenti NIL
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
 
 (defun recognize-from-state (current-state remaining-input final-states 
                              transitions visited-epsilon)
   (cond
-   ;; CASO BASE: Input esaurito
-   ;; Controlliamo se siamo in uno stato finale
+   ;; Input esaurito: controlla se stato finale
+   ;; altrimenti prova a raggiungerlo con epsilon transizioni
    ((null remaining-input)
     (if (member current-state final-states)
-        t  ; Successo! Abbiamo riconosciuto l'input
-        ;; Anche se l'input e' finito, potremmo raggiungere uno stato finale
-        ;; tramite epsilon-transizioni, quindi le proviamo
+        t
         (try-epsilon-transitions current-state remaining-input final-states 
                                 transitions visited-epsilon)))
    
-   ;; CASO RICORSIVO: Abbiamo ancora simboli da consumare
+   ;; Input rimanente: prova transizioni simbolo poi epsilon
    (t
-    ;; Proviamo prima le transizioni che consumano il prossimo simbolo
-    ;; e poi le epsilon-transizioni (per esplorarle tutte)
     (or (try-symbol-transitions current-state remaining-input final-states 
                                transitions)
         (try-epsilon-transitions current-state remaining-input final-states 
                                 transitions visited-epsilon)))))
 
 
-;;; ----------------------------------------------------------------------------
-;;; FUNZIONE: nfsa-recognize
-;;; Riconosce se l'input appartiene al linguaggio dell'automa FA
-;;; Ritorna T se l'input viene accettato, NIL altrimenti
-;;; Genera un errore se FA non e' un automa valido
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
+;;; FUNZIONE PRINCIPALE: nfsa-recognize
+;;; Riconosce se Input appartiene al linguaggio dell'automa FA
+;;; ===========================================================================
 
 (defun nfsa-recognize (FA Input)
-  ;; Controllo che FA e' un automa valido
   (unless (nfsa-p FA)
     (error "~A non è un automa." FA))
   
-  ;; Se input non e' una lista, ritorna NIL 
-  ;; (come esempio (nfsa-recognize basic-nfsa-1 'a) -> NIL)
+  ;; Input deve essere una lista, altrimenti ritorna NIL
   (if (listp Input)
-      ;; Estrazione componenti dell'automa
-      (let ((start (nfsa-initial FA))        ; Stato iniziale
-            (final-states (nfsa-finals FA))  ; Stati finali
-            (transitions (nfsa-delta FA)))   ; Transizioni
-        
-        ;; Chiamata alla funzione helper
+      ;; Estrae i componenti dell'automa e avvia il riconoscimento
+      ;; partendo dallo stato iniziale
+      (let ((start (nfsa-initial FA))
+            (final-states (nfsa-finals FA))
+            (transitions (nfsa-delta FA)))
         (recognize-from-state start Input final-states transitions '()))
       nil))
 

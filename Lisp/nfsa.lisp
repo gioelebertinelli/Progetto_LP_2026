@@ -3,13 +3,20 @@
 ; Martinalli	Marco	924003
 
 ;;; ===========================================================================
-;;; DICHIARAZIONE FUNZIONI: per evitare warning 
+;;; DICHIARAZIONE FUNZIONI per evitare warning 
 ;;; (nel caso venga chiamata prima di essere letta)
 ;;; ===========================================================================
 
 (declaim (ftype (function (t t t t t) t) recognize-from-state))
 (declaim (ftype (function (t t t t t) t) try-epsilon-transitions))
 (declaim (ftype (function (t t t t) t) try-symbol-transitions))
+
+;;; Definizione della struttura dell'automa (NFSA)
+(defstruct nfsa
+  initial    ; Stato iniziale
+  finals     ; Lista degli stati finali
+  delta)     ; Lista delle transizioni (stato-da input stato-a)
+
 
 ;;; ===========================================================================
 ;;; FUNZIONE PRINCIPALE: is_regex
@@ -29,14 +36,14 @@
    ((listp RE)
     (cond
      
-     ;; Operatore 'c' (sequenza): almeno un argomento, tutti regex valide
+     ;; Operatore 'c' (sequenza): almeno due argomenti, tutti regex valide
      ((eq (first RE) 'c)
-      (and (>= (length (rest RE)) 1)  
+      (and (>= (length (rest RE)) 2)  
            (every #'is-regex (rest RE))))
      
-     ;; Operatore 'a' (alternativa): almeno un argomento, tutti regex valide
+     ;; Operatore 'a' (alternativa): almeno due argomenti, tutti regex valide
      ((eq (first RE) 'a)
-      (and (>= (length (rest RE)) 1)
+      (and (>= (length (rest RE)) 2)
            (every #'is-regex (rest RE))))
      
      ;; Operatore 'z' (chiusura di Kleene): un argomento, regex valida
@@ -62,19 +69,13 @@
 ;;; un’espressione regolare, altrimenti ritorna NIL.
 ;;; ===========================================================================
 
-;;; Definizione della struttura dell'automa (NFSA)
-(defstruct nfsa
-  initial    ; Stato iniziale
-  finals     ; Lista degli stati finali
-  delta)     ; Lista delle transizioni (stato-da input stato-a)
-
 ;;; Helper per creare una transizione. 
 ;;; Se l'input è NIL, rappresenta una epsilon-transizione.
 (defun make-transition (from input to)
   (list from input to))
 
 ;;; ===========================================================================
-;;; FUNZIONE HELPER
+;;; FUNZIONE HELPER: compile-recursive
 ;;; Funzione che compila ricorsivamente la regex.
 ;;; Ritorna una lista di tre elementi:
 ;;; (stato-inizio stato-fine lista-transizioni)

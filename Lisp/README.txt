@@ -14,144 +14,53 @@ REQUISITI:
 
 ESECUZIONE:
 -----------
-1. Caricare il file nell'interprete Lisp:
-   
-   (load "nfsa.lisp")
-
-2. Le funzioni principali saranno disponibili automaticamente.
+(load "nfsa.lisp")
 
 FUNZIONI PRINCIPALI:
 --------------------
 
 1. is-regex (RE)
-   Controlla se l'espressione RE è una regex valida.
-   Ritorna T se RE è una regex valida, NIL altrimenti.
-   
-   Casistiche:
-   - Lista vuota: NIL (non valida)
-   - Atomo: T (sempre valido, anche 'a, 'c, 'z, 'o quando usati come simboli)
-   - Lista con operatore 'c' (sequenza): valida se ha almeno un argomento
-     e tutti gli argomenti sono regex valide
-   - Lista con operatore 'a' (alternativa): valida se ha almeno un argomento
-     e tutti gli argomenti sono regex valide
-   - Lista con operatore 'z' (chiusura di Kleene): valida se ha esattamente
-     un argomento che è una regex valida
-   - Lista con operatore 'o' (uno o più): valida se ha esattamente un argomento
-     che è una regex valida
-   - Lista che non inizia con operatori riservati (c, a, z, o): T (S-expression
-     che rappresenta un simbolo dell'alfabeto, es: (foo bar))
+   Valida se RE è una regex ben formata. Ritorna T se valida, NIL altrimenti.
 
 2. nfsa-compile-regex (RE)
-   Compila un'espressione regolare in un automa finito non deterministico.
-   Ritorna l'automa (struct nfsa) se RE è valida, NIL altrimenti.
+   Compila una regex in un automa NFSA. Ritorna la struct nfsa se RE è valida,
+   NIL altrimenti.
 
 3. nfsa-recognize (FA Input)
-   Riconosce se l'input appartiene al linguaggio dell'automa FA.
-   Ritorna T se l'input viene accettato, NIL altrimenti.
-   Genera un errore se FA non è un automa valido.
+   Verifica se Input appartiene al linguaggio dell'automa FA.
+   Ritorna T se accettato, NIL altrimenti. Input deve essere una lista.
 
-ESEMPI DI UTILIZZO:
--------------------
-
-;; Compilare una regex semplice
-(defvar *automa1* (nfsa-compile-regex 'a))
-
-;; Riconoscere una stringa
-(nfsa-recognize *automa1* '(a))        ; -> T
-(nfsa-recognize *automa1* '(b))        ; -> NIL
-
-;; Regex più complessa
-(defvar *automa2* (nfsa-compile-regex '(c a b)))
-(nfsa-recognize *automa2* '(a b))      ; -> T
-
-FUNZIONI HELPER (INTERNE):
---------------------------
-
-1. recognize-from-state (current-state remaining-input final-states 
-                        transitions visited-epsilon)
-   Funzione ricorsiva che esplora l'automa con backtracking.
-   
-   Parametri:
-   - current-state: lo stato corrente in cui ci si trova
-   - remaining-input: la lista di simboli ancora da consumare
-   - final-states: lista degli stati finali
-   - transitions: lista di tutte le transizioni dell'automa
-   - visited-epsilon: lista degli stati visitati per epsilon-transizioni
-                     (usato per prevenire loop infiniti)
-   
-   Comportamento:
-   1. Se l'input è finito: controlla se si è in uno stato finale o se è
-      raggiungibile uno stato finale tramite epsilon-transizioni
-   2. Se c'è ancora input: prova prima le transizioni che consumano simboli,
-      poi le epsilon-transizioni
-   3. Ritorna T se almeno UN percorso porta al successo, NIL altrimenti
-
-2. try-symbol-transitions (current-state remaining-input final-states transitions)
-   Prova tutte le transizioni che consumano il prossimo simbolo dell'input.
-   
-   Parametri:
-   - current-state: lo stato corrente
-   - remaining-input: lista dei simboli ancora da consumare
-   - final-states: lista degli stati finali
-   - transitions: lista di tutte le transizioni
-   
-   Comportamento:
-   - Cerca transizioni applicabili dallo stato corrente che:
-     1. Partono dallo stato corrente
-     2. Hanno un simbolo non-NIL (non epsilon)
-     3. Il simbolo matcha con il primo simbolo di remaining-input
-   - Dopo una transizione simbolo, resetta visited-epsilon (si può ri-entrare
-     in stati già visitati)
-   - Ritorna T se almeno una porta al successo, NIL altrimenti
-
-3. try-epsilon-transitions (current-state remaining-input final-states 
-                           transitions visited-epsilon)
-   Prova tutte le epsilon-transizioni (quelle con simbolo NIL).
-   
-   Parametri:
-   - current-state: lo stato corrente
-   - remaining-input: lista dei simboli ancora da consumare (non consumato)
-   - final-states: lista degli stati finali
-   - transitions: lista di tutte le transizioni
-   - visited-epsilon: lista degli stati già visitati per epsilon-transizioni
-   
-   Comportamento:
-   - Implementa controllo anti-loop: se current-state è già in visited-epsilon,
-     ritorna NIL immediatamente
-   - Aggiunge current-state a visited-epsilon prima di esplorare
-   - Non consuma input (remaining-input rimane invariato)
-   - Ritorna T se almeno una porta al successo, NIL altrimenti
-
-NOTE SULL'IMPLEMENTAZIONE:
----------------------------
-
-1. BACKTRACKING:
-   La funzione 'some' esplora tutte le possibilità e ritorna T appena una
-   ha successo.
-
-2. EPSILON-TRANSIZIONI:
-   Sono cruciali per gli operatori z (chiusura di Kleene) e a (alternativa) perché
-   permettono di "saltare" senza consumare input.
-
-3. CONFRONTO SIMBOLI:
-   Si usa 'equal' invece di 'eql' perché i simboli possono essere liste
-   (S-expressions).
-   Esempio: il simbolo (foo bar) deve matchare con (foo bar).
-
-4. ORDINE DI PROVA:
-   Si provano prima le transizioni normali, poi le epsilon. 
-
-5. PREVENZIONE LOOP INFINITI:
-   Le epsilon-transizioni possono creare cicli infiniti. Per prevenirli,
-   recognize-from-state mantiene una lista visited-epsilon degli stati
-   visitati tramite epsilon-transizioni. Quando si prova una epsilon-transizione,
-   lo stato corrente viene aggiunto a visited-epsilon prima dell'esplorazione.
-   Se uno stato è già in visited-epsilon, si ferma l'esplorazione da quello stato.
-   Nota: visited-epsilon viene resettato dopo una transizione simbolo, permettendo
-   di ri-entrare in stati già visitati quando si consuma input.
 
 ================================================================================
+
+LOGICA DI IMPLEMENTAZIONE is-regex (RE)
+---------------------------------------
+La funzione valida ricorsivamente la struttura di una regex seguendo le regole
+sintattiche degli operatori.
+
+1. Casi Base
+   - Lista vuota: NIL (non valida)
+   - Atomo: T (sempre valido, anche 'a, 'c, 'z, 'o quando usati come simboli)
+
+2. Operatori Binari/N-ari
+   - Operatore 'c' (sequenza): valida se ha almeno 2 argomenti e tutti gli
+     argomenti sono regex valide
+   - Operatore 'a' (alternativa): valida se ha almeno 2 argomenti e tutti gli
+     argomenti sono regex valide
+
+3. Operatori Unari
+   - Operatore 'z' (chiusura di Kleene): valida se ha esattamente 1 argomento
+     che è una regex valida
+   - Operatore 'o' (uno o più): valida se ha esattamente 1 argomento che è
+     una regex valida
+
+4. S-expression
+   - Lista che non inizia con operatori riservati (c, a, z, o): T
+     Rappresenta un simbolo dell'alfabeto (es: (foo bar))
+
+
 LOGICA DI IMPLEMENTAZIONE nfsa-compile-regex (RE)
+-------------------------------------------------
 Questo modulo permette di trasformare un'espressione regolare (in formato S-expression)
 in un Automa a Stati Finiti Non Deterministico (NFSA) utilizzando la Costruzione di Thompson.
 
@@ -195,3 +104,32 @@ La funzione compile-recursive smonta la regex e la ricostruisce seguendo questi 
 	Skip (Solo Caso 'z'): Una epsilon-mossa permette di saltare il simbolo se presente 0 volte.
 
 	Entrata/Uscita: Due stati extra racchiudono il simbolo per mantenere l'automa modulare.
+
+
+LOGICA DI IMPLEMENTAZIONE nfsa-recognize
+----------------------------------------
+Il riconoscimento avviene tramite backtracking esplorando tutti i percorsi possibili
+nell'automa.
+
+1. Funzione Principale: recognize-from-state
+   Esplora ricorsivamente l'automa partendo da uno stato corrente.
+   
+   Logica:
+   - Input esaurito: verifica se stato finale o raggiungibile via epsilon
+   - Input rimanente: prova prima transizioni simbolo, poi epsilon-transizioni
+   - Ritorna T se almeno un percorso porta all'accettazione
+
+2. Gestione Epsilon-Transizioni
+   Le epsilon-transizioni (input NIL) permettono di cambiare stato senza consumare
+   input. Per prevenire loop infiniti, si mantiene una lista visited-epsilon degli
+   stati visitati tramite epsilon. Se uno stato è già in visited-epsilon, si ferma
+   l'esplorazione da quello stato.
+
+3. Gestione Transizioni Simbolo
+   Le transizioni simbolo consumano il primo elemento dell'input. Dopo una
+   transizione simbolo, visited-epsilon viene resettato, permettendo di
+   ri-entrare in stati già visitati.
+
+4. Confronto Simboli
+   Si usa 'equal' invece di 'eql' per supportare S-expressions come simboli
+   (es: (foo bar) matcha con (foo bar)).

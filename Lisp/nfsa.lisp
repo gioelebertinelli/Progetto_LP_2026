@@ -58,137 +58,161 @@
 
 ;;; ----------------------------------------------------------------------------
 ;;; FUNZIONE: nfsa-compile-regex
-;;; ritorna l’automa ottenuto dalla compilazione di RE, se è un’espressione regolare, 
-;;; altrimenti ritorna NIL.
+;;; ritorna l’automa ottenuto dalla compilazione di RE, se è 
+;;; un’espressione regolare, altrimenti ritorna NIL.
 ;;; ----------------------------------------------------------------------------
 
 ;;; Definizione della struttura dell'automa (NFSA)
-
 (defstruct nfsa
-  initial   ; Stato iniziale
-  finals    ; Lista degli stati finali
-  delta)    ; Lista delle transizioni (stato-da input stato-a)
+  initial    ; Stato iniziale
+  finals     ; Lista degli stati finali
+  delta)     ; Lista delle transizioni (stato-da input stato-a)
 
-;;; Variabile globale per contare gli stati e generare ID univoci.
-(defparameter *state-counter* 0)
-
-;;; Helper per generare un nuovo stato (semplicemente un numero intero)
-(defun new-state ()
-  (incf *state-counter*))
-
-;;; Helper per creare una transizione.
+;;; Helper per creare una transizione. 
 ;;; Se l'input è NIL, rappresenta una epsilon-transizione.
 (defun make-transition (from input to)
   (list from input to))
 
-;;; Funzione  che compila ricorsivamente la regex.
-;;; Ritorna una lista di tre elementi: (stato-inizio stato-fine lista-transizioni)
-;;; serve per collegare "i pezzi"
+;;;----------------------------------------------------------------------------
+;;; FUNZIONE HELPER
+;;; Funzione che compila ricorsivamente la regex.
+;;; Ritorna una lista di tre elementi:
+;;; (stato-inizio stato-fine lista-transizioni)
 (defun compile-recursive (re)
   (cond
-    ;; CASO 1: Atomo (Simbolo base o lista che non è un operatore)
+    ;; CASO BASE: Atomo o primo elemento della lista non è una operazione
     ((or (atom re)
          (and (listp re) 
               (not (member (first re) '(c a z o)))))
-     (let ((start (new-state))
-           (end (new-state)))
+     ;; con gensym assegno etichetta allo stato iniziale e a quello finale        
+     (let ((start (gensym "Q")) 
+           (end (gensym "Q")))
+        ;; lista che contiene lo stato iniziale, finale e una lista con
+        ;; la transizione
        (list start 
              end 
              (list (make-transition start re end)))))
 
     ;; CASO 2: Concatenazione ('c')
     ((eq (first re) 'c)
-     (let* ((args (rest re))
-            (first-res (compile-recursive (first args)))
-            (current-start (first first-res))
-            (current-end (second first-res))
-            (current-trans (third first-res)))
-       
-     
-       (dolist (next-re (rest args))
-         (let* ((next-res (compile-recursive next-re))
-                (next-start (first next-res))
-                (next-end (second next-res))
-                (next-trans (third next-res)))
+     ;; la funzione reduce permette di usare una unica lista per effettuare 
+     ;; la funzione lambda su tutte le chiamate ricorsive della funzione 
+     ;; "compile-recursive"  la funzione lambda concatena l'automa parziale 
+     ;; con l'automa del simbolo successivo in particolare crea una lista con:
+     ;; stato inizale è lo stato iniziale automa parziale
+     ;; stato finale è lo stato finale del'automa da concatenare.
+     ;; con un append mette in un unica lista le transizioni dei 2 e la 
+     ;; epsilon mossa.
+     (reduce (lambda (actual-automa concat-automa)
+               (list (first actual-automa)
+                     (second concat-automa)        
+                     (append (third actual-automa) 
+                             (third concat-automa)  
+                             ;; effettua una epsilon-mossa per concatenare
+                             ;; lo stato finale dell'automa parziale con lo
+                             ;; stato iniziale dell'automa da concatenare 
+                             (list (make-transition (second actual-automa) 
+                                                    nil 
+                                                    (first concat-automa))))))
+             (mapcar #'compile-recursive (rest re))))
 
-           ;; Colleghiamo la fine del precedente all'inizio del successivo
-           (push (make-transition current-end nil next-start) current-trans)
-           ;; Uniamo le transizioni
-           (setf current-trans (append current-trans next-trans))
-           ;; Aggiorniamo la fine corrente
-           (setf current-end next-end)))
-       
-       (list current-start current-end current-trans)))
-
-    ;; CASO 3: Alternativa ('a' - OR)
-
+    ;; CASO 3: Alternativa ('a')
     ((eq (first re) 'a)
-     (let ((global-start (new-state))
-           (global-end (new-state))
-           (all-trans '()))
-       
-       (dolist (sub-re (rest re))
-         (let* ((res (compile-recursive sub-re))
-                (s (first res))
-                (e (second res))
-                (t-list (third res)))
-           ;; Start globale -> Start sotto-regex
-           (push (make-transition global-start nil s) all-trans)
-           ;; End sotto-regex -> End globale
-           (push (make-transition e nil global-end) all-trans)
-           ;; Accumuliamo le transizioni interne
-           (setf all-trans (append all-trans t-list))))
-       
-       (list global-start global-end all-trans)))
+    ;; con gensym assegno etichetta allo stato iniziale e a quello finale   
+     (let ((start (gensym))
+           (end (gensym)))
+       ;; crea una lista con stato iniziale, finale, e una lista con le 
+       ;; transizioni
+       (list start
+             end
+             (apply #'append 
+                    ;; esegue questa operazione su tutto il resto della re
+                    (mapcar (lambda (sotto-regex)
+                              ;; la funzione lambda genera l'automa per la
+                              ;; sotto-regex e definisce stato iniziale,
+                              ;; stato finale e transizioni usando la 
+                              ;; struttura della lista
+                              (let* ((child-automa 
+                                      (compile-recursive sotto-regex))
+                                     (start-child (first child-automa))
+                                     (end-child  (second child-automa))
+                                     (trans-child 
+                                      (third child-automa)))
+                                ;; con le epsilon mosse fa le transizioni
+                                ;; tra stato iniziale e stato iniziale figlio
+                                ;; e tra stato finale figlio e stato finale
+                                ;; e con append le unisce alle transizioni
+                                ;; dell' automa figlio
+                                (append (list (make-transition start 
+                                                               nil 
+                                                               start-child)
+                                              (make-transition end-child 
+                                                               nil 
+                                                               end))
+                                        trans-child)))
+                            (rest re))))))
 
-    ;; CASO 4: Stella di Kleene ('z' - Zero o più)
+    ;; CASO 4: Stella di Kleene ('z')
     ((eq (first re) 'z)
-     (let* ((res (compile-recursive (second re))) ; L'argomento è il secondo elemento
-            (s (first res))
-            (e (second res))
-            (t-list (third res))
-            (new-s (new-state))
-            (new-e (new-state)))
-       
-       ;; Aggiungiamo le 4 transizioni tipiche
-       (push (make-transition new-s nil s) t-list)     ; Entrata
-       (push (make-transition e nil new-e) t-list)     ; Uscita
-       (push (make-transition e nil s) t-list)         ; Loop indietro
-       (push (make-transition new-s nil new-e) t-list) ; Skip (caso zero volte)
-       
-       (list new-s new-e t-list)))
+      ;; si usa let* perchè usando let non potrei usare nelle definizioni
+      ;; successive quelle create in precedenza perchè con let vengono 
+      ;; create tutte in contemporanea
+      ;; viene creato un automa usando le chiamate ricorsive per analizzare
+      ;; ogni simbolo della re
+     (let* ((symbol-automa      (compile-recursive (second re)))
+            (start-symbol      (first symbol-automa))
+            (end-symbol      (second symbol-automa))
+            (trans-symbol  (third symbol-automa))
+            ;; con gensym assegno etichetta a stato inziale e finale
+            (start (gensym))
+            (end   (gensym)))
+       ;; creo lista con stato iniziale, finale e transizioni
+       (list start
+             end
+                           ;; con una epsilon mossa entra nel simbolo
+             (append (list (make-transition start nil start-symbol)
+                           ;; dall'ultimo va allo stato finale
+                           (make-transition end-symbol nil end) 
+                           ;; fa il loop: ovvero transizione che dall'ultimo
+                           ;; torna al primo   
+                           (make-transition end-symbol nil 
+                                            start-symbol)  
+                           ;; è presente 0 volte, quindi basta una epsilon
+                           ;; mossa      
+                           (make-transition start nil end))          
+                     trans-symbol))))
 
     ;; CASO 5: Uno o più ('o')
-    ;; Simile alla stella, ma senza lo skip iniziale diretto
+    ;; Funziona esattamente come la chiusura di Kleene solo che non c'è
+    ;; il caso skip perchè non possono esserci 0 volte.
     ((eq (first re) 'o)
-     (let* ((res (compile-recursive (second re)))
-            (s (first res))
-            (e (second res))
-            (t-list (third res))
-            (new-s (new-state))
-            (new-e (new-state)))
-       
-       (push (make-transition new-s nil s) t-list)     ; Entrata
-       (push (make-transition e nil new-e) t-list)     ; Uscita
-       (push (make-transition e nil s) t-list)         ; Loop indietro
-       ;; NON c'è la transizione new-s -> new-e perché deve farne almeno uno
-       
-       (list new-s new-e t-list)))))
+     (let* ((automa-interno      (compile-recursive (second re)))
+            (inizio-interno      (first automa-interno))
+            (fine-interna        (second automa-interno))
+            (transizioni-interne (third automa-interno))
+            (start (gensym))
+            (end   (gensym)))
+       (list start
+             end
+             (append (list (make-transition start nil inizio-interno)
+                           (make-transition fine-interna nil end)     
+                           (make-transition fine-interna nil 
+                                            inizio-interno))           
+                     transizioni-interne))))))
 
-;;; FUNZIONE PRINCIPALE RICHIESTA
+;;; --------------------------------------------------------------------------
+;;; FUNZIONE PRINCIPALE
+
 (defun nfsa-compile-regex (RE)
-  ;; Controllo preliminare usando la tua funzione is-regex
   (if (is-regex RE)
-      (progn
-        ;; Resettiamo il contatore per avere stati puliti partendo da 1 o 0
-        (setf *state-counter* 0)
-        ;; Compiliamo ottenendo i 3 pezzi (start end transitions)
-        (let ((result (compile-recursive RE)))
-          ;; Costruiamo e ritorniamo la struct finale
-          (make-nfsa :initial (first result)
-                     :finals (list (second result))
-                     :delta (third result))))
+      (let ((result (compile-recursive RE)))
+        ;; una volta creata la struct Lisp genera questa funzioni per 
+        ;;costruire gli elementi.
+        (make-nfsa :initial (first result)
+                   :finals (list (second result))
+                   :delta (third result)))
       nil))
+;;; --------------------------------------------------------------------------
 
 
 ;;; ===========================================================================

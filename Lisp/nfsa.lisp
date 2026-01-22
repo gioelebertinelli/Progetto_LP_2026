@@ -56,11 +56,11 @@
    (t nil)))
 
 
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
 ;;; FUNZIONE: nfsa-compile-regex
 ;;; ritorna l’automa ottenuto dalla compilazione di RE, se è 
 ;;; un’espressione regolare, altrimenti ritorna NIL.
-;;; ----------------------------------------------------------------------------
+;;; ===========================================================================
 
 ;;; Definizione della struttura dell'automa (NFSA)
 (defstruct nfsa
@@ -73,11 +73,13 @@
 (defun make-transition (from input to)
   (list from input to))
 
-;;;----------------------------------------------------------------------------
+;;; ===========================================================================
 ;;; FUNZIONE HELPER
 ;;; Funzione che compila ricorsivamente la regex.
 ;;; Ritorna una lista di tre elementi:
 ;;; (stato-inizio stato-fine lista-transizioni)
+;;; ===========================================================================
+
 (defun compile-recursive (re)
   (cond
     ;; CASO BASE: Atomo o primo elemento della lista non è una operazione
@@ -200,7 +202,7 @@
                                             inizio-interno))           
                      transizioni-interne))))))
 
-;;; --------------------------------------------------------------------------
+;;; ===========================================================================
 ;;; FUNZIONE PRINCIPALE
 
 (defun nfsa-compile-regex (RE)
@@ -212,7 +214,7 @@
                    :finals (list (second result))
                    :delta (third result)))
       nil))
-;;; --------------------------------------------------------------------------
+;;; ===========================================================================
 
 
 ;;; ===========================================================================
@@ -311,4 +313,3 @@
             (transitions (nfsa-delta FA)))
         (recognize-from-state start Input final-states transitions '()))
       nil))
-

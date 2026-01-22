@@ -105,3 +105,47 @@ NOTE SULL'IMPLEMENTAZIONE:
    o no), ma può influenzare l'efficienza.
 
 ================================================================================
+LOGICA DI IMPLEMENTAZIONE nfsa-compile-regex (RE)
+Questo modulo permette di trasformare un'espressione regolare (in formato S-expression)
+in un Automa a Stati Finiti Non Deterministico (NFSA) utilizzando la Costruzione di Thompson.
+
+1. Strutture Dati
+L'automa è costruito combinando tre elementi fondamentali:
+
+Stati: Etichette univoche generate con gensym (es. Q1234).
+Transizioni: Triplette (da-stato input a-stato).
+Epsilon-mosse: Transizioni con input NIL che permettono di cambiare stato senza consumare caratteri della stringa.
+
+L'automa finale viene restituito come una struttura nfsa contenente lo stato iniziale, la lista degli stati finali e
+l'insieme di tutte le transizioni (delta).
+
+2. Logica di Compilazione (Casi)
+La funzione compile-recursive smonta la regex e la ricostruisce seguendo questi schemi logici:
+
+	a. Caso Base (Simbolo singolo)
+	Crea un'unità minima con due stati e una transizione diretta.
+
+	Inizio --(carattere)--> Fine
+
+	b. Concatenazione ('c')
+       	Unisce gli automi in serie (uno dopo l'altro).
+
+	Logica: Collega la fine del primo automa all'inizio del secondo tramite una epsilon-mossa.
+
+	Accumulatore: Usa reduce per unire un numero infinito di simboli in una catena continua.
+
+	c. Alternativa ('a')
+	Implementa l'operatore OR (bivio).
+
+	Logica: Crea un nuovo inizio che punta a tutti i rami possibili e una nuova fine dove tutti i rami convergono.
+
+	Struttura: È una configurazione "a diamante" che permette di scegliere un percorso tra i tanti.
+
+	d. Stella di Kleene ('z') e "Uno o più" ('o')
+	Gestiscono la ripetizione.
+
+	Loop: Una epsilon-mossa torna dalla fine all'inizio del simbolo per ripeterlo.
+
+	Skip (Solo Caso 'z'): Una epsilon-mossa permette di saltare il simbolo se presente 0 volte.
+
+	Entrata/Uscita: Due stati extra racchiudono il simbolo per mantenere l'automa modulare.

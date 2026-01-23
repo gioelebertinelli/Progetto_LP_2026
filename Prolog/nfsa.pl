@@ -26,50 +26,50 @@ reserved(epsilon).
 % predicato is_regex\1
 
 % Caso base: se viene passata una variabile, fallisco subito.
-is_regex(Re) :-
-    var(Re),
+is_regex(RE) :-
+    var(RE),
     !,
     fail.
 
 % Caso base: tutti gli atomi/numeri sono regex (simboli dell'alfabeto)
 % tranne epsilon che ci serve come etichetta speciale di transizione.
-is_regex(Re) :-
-    atomic(Re),
-    Re \= epsilon.
+is_regex(RE) :-
+    atomic(RE),
+    RE \= epsilon.
 
 % Operatori unari: z ed o
 % (controllo solo che dentro sia regex)
-is_regex(z(Re)) :-
-    is_regex(Re).
+is_regex(z(RE)) :-
+    is_regex(RE).
 
-is_regex(o(Re)) :-
-    is_regex(Re).
+is_regex(o(RE)) :-
+    is_regex(RE).
 
 % Concatenazione: c
 % Noi la accettiamo solo se ha almeno 2 argomenti
-is_regex(Expr) :-
-    compound(Expr),
-    compound_name_arity(Expr, c, N),
+is_regex(RE) :-
+    compound(RE),
+    compound_name_arity(RE, c, N),
     N >= 2,
     % trasformo in lista degli argomenti e controllo ricorsivamente
-    Expr =.. [c | Args],
+    RE =.. [c | Args],
     maplist(is_regex, Args).
 
 % Alternativa: a
 % Anche qui almeno 2 argomenti
-is_regex(Expr) :-
-    compound(Expr),
-    compound_name_arity(Expr, a, N),
+is_regex(RE) :-
+    compound(RE),
+    compound_name_arity(RE, a, N),
     N >= 2,
-    Expr =.. [a | Args],
+    RE =.. [a | Args],
     maplist(is_regex, Args).
 
 % Se è un termine composto tipo foo(bar) o zio_di(achille) ecc...
 % allora lo considero simbolo valido solo se il funtore non è riservato.
 % (foo(bar) ok, ma c(a,b) qui no perché c è riservato, anche foo() ok)
-is_regex(Re) :-
-    compound(Re),
-    compound_name_arity(Re, F, _),
+is_regex(RE) :-
+    compound(RE),
+    compound_name_arity(RE, F, _),
     \+ reserved(F).
 
 
@@ -77,11 +77,11 @@ is_regex(Re) :-
 % compila la regex in un NFSA e lo salva nel DB dinamico.
 % Se esiste già un automa con lo stesso Id, lo riscriviamo.
 
-nfsa_compile_regex(FA_Id, Re) :-
+nfsa_compile_regex(FA_Id, RE) :-
     % Id non deve contenere alcuna variabile
     ground(FA_Id),
     % regex deve essere valida
-    is_regex(Re),
+    is_regex(RE),
 
     % se esiste già un automa con questo id, lo tolgo prima
     nfsa_delete(FA_Id),
@@ -95,7 +95,7 @@ nfsa_compile_regex(FA_Id, Re) :-
     assertz(nfsa_final(FA_Id, End)),
 
     % compilo effettivamente (se per qualche motivo fallisce, pulisco tutto)
-    (   compile(FA_Id, Re, Start, End)
+    (   compile(FA_Id, RE, Start, End)
     ->  true
     ;   nfsa_delete(FA_Id), fail
     ).

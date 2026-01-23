@@ -2,11 +2,9 @@
 ; Gianoli	Matteo	924072
 ; Martinalli	Marco	924003
 
-;;; ===========================================================================
-;;; DICHIARAZIONE FUNZIONI per evitare warning 
-;;; (nel caso venga chiamata prima di essere letta)
-;;; ===========================================================================
 
+;;; Dichiarazione funzioni per evitare warning in fase di compilazione
+;;; nel caso venga chiamata prima di essere letta
 (declaim (ftype (function (t t t t t) t) recognize-from-state))
 (declaim (ftype (function (t t t t t) t) try-epsilon-transitions))
 (declaim (ftype (function (t t t t) t) try-symbol-transitions))
@@ -29,34 +27,34 @@
    
    ((null RE) nil)
    
-   ;; Atomo, e' sempre una regex valida (anche 'a, 'c, 'z, 'o come simboli)
+   ;; Atomo e' sempre una regex valida (anche 'a, 'c, 'z, 'o come simboli)
    ((atom RE) t)
    
-   ;; Lista, controllo operatore
+   ;; Se è una lista controllo operatore
    ((listp RE)
     (cond
      
-     ;; Operatore 'c' (sequenza): almeno due argomenti, tutti regex valide
+     ;; Operatore 'c' (sequenza): almeno due argomenti e tutti regex valide
      ((eq (first RE) 'c)
       (and (>= (length (rest RE)) 2)  
            (every #'is-regex (rest RE))))
      
-     ;; Operatore 'a' (alternativa): almeno due argomenti, tutti regex valide
+     ;; Operatore 'a' (alternativa): almeno due argomenti e tutti regex valide
      ((eq (first RE) 'a)
       (and (>= (length (rest RE)) 2)
            (every #'is-regex (rest RE))))
      
-     ;; Operatore 'z' (chiusura di Kleene): un argomento, regex valida
+     ;; Operatore 'z' (chiusura di Kleene): un argomento e regex valida
      ((eq (first RE) 'z)
       (and (= (length (rest RE)) 1)  
            (is-regex (second RE))))
      
-     ;; Operatore 'o' (uno o più): un argomento, regex valida
+     ;; Operatore 'o' (uno o più): un argomento e regex valida
      ((eq (first RE) 'o)
       (and (= (length (rest RE)) 1)
            (is-regex (second RE))))
      
-     ;; Se non è un operatore riservato, è una S-expression
+     ;; Se non è un operatore riservato è una S-expression
      ;; Esempio: (foo bar)
      (t t)))
    
@@ -243,7 +241,7 @@
 
 ;;; ===========================================================================
 ;;; FUNZIONE HELPER: try-symbol-transitions
-;;; Prova transizioni che consumano il prossimo simbolo dell'input
+;;; Prova tutte le transizioni che consumano un simbolo
 ;;; ===========================================================================
 
 (defun try-symbol-transitions (current-state remaining-input final-states 
@@ -252,43 +250,44 @@
     (let ((next-symbol (first remaining-input))
           (rest-input (rest remaining-input)))
       
-      ;; Trova tutte le transizioni applicabili dallo stato corrente
-      ;; che consumano esattamente il prossimo simbolo
+      ;; Trova tutte le transizioni che si possono applicare dallo stato attuale
+      ;; che consumano il prossimo simbolo
       (some #'(lambda (trans)
                 (let ((from-state (first trans))
                       (symbol (second trans))
                       (to-state (third trans)))
                   
                   ;; Controlla se questa transizione e' applicabile:
-                  ;; 1. Parte dallo stato corrente
+                  ;; 1. Parte dallo stato attuale
                   ;; 2. Il simbolo corrisponde (NON e' epsilon)
-                  ;; 3. Il simbolo matcha con next-symbol
+                  ;; 3. Il simbolo è uguale al primo da consumare
                   (when (and (eql from-state current-state)
                             (not (null symbol)) 
                             (equal symbol next-symbol))
                     
-                    ;; Reset di visited-epsilon dopo transizione simbolo
+                    ;; Si resetta visited-epsilon dopo una transizione che
+                    ;; ha consumato un simbolo
                     (recognize-from-state to-state rest-input final-states 
                                          transitions '()))))
             transitions))))
 
 ;;; ===========================================================================
 ;;; FUNZIONE HELPER: recognize-from-state
-;;; Funzione ricorsiva che esplora l'automa con backtracking
+;;; Funzione ricorsiva che esplora l'automa con backtracking 
 ;;; ===========================================================================
 
 (defun recognize-from-state (current-state remaining-input final-states 
                              transitions visited-epsilon)
   (cond
-   ;; Input esaurito: controlla se stato finale
-   ;; altrimenti prova a raggiungerlo con epsilon transizioni
+   ;; Input esaurito: controlla se siamo in uno stato finale
+   ;; altrimenti prova a raggiungerlo con le epsilon transizioni
    ((null remaining-input)
     (if (member current-state final-states)
         t
         (try-epsilon-transitions current-state remaining-input final-states 
                                 transitions visited-epsilon)))
    
-   ;; Input rimanente: prova transizioni simbolo poi epsilon
+   ;; Input rimanente: prova transizioni (prima simbolo e poi epsilon)
    (t
     (or (try-symbol-transitions current-state remaining-input final-states 
                                transitions)
@@ -302,10 +301,12 @@
 ;;; ===========================================================================
 
 (defun nfsa-recognize (FA Input)
+  
+  ;; Controllo che FA sia un automa valido
   (unless (nfsa-p FA)
     (error "~A non è un automa." FA))
   
-  ;; Input deve essere una lista, altrimenti ritorna NIL
+  ;; Se Input non è una lista ritorna nil
   (if (listp Input)
       ;; Estrae i componenti dell'automa e avvia il riconoscimento
       ;; partendo dallo stato iniziale

@@ -27,7 +27,7 @@
    
    ((null RE) nil)
    
-   ;; Atomo e' sempre una regex valida (anche 'a, 'c, 'z, 'o come simboli)
+   ;; Atomo è sempre una regex valida (anche 'a, 'c, 'z, 'o come simboli)
    ((atom RE) t)
    
    ;; Se è una lista controllo operatore

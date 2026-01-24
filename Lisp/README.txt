@@ -132,9 +132,9 @@ questi schemi logici:
 	stato iniziale ed uno finale.
 
 
-LOGICA DI IMPLEMENTAZIONE nfsa-recognize
+LOGICA DI IMPLEMENTAZIONE nfsa-recognize (FA Input)
 ----------------------------------------
-La funzione verifica se una stringa in input  appartiene al linguaggio 
+La funzione verifica se una stringa in input appartiene al linguaggio 
 riconosciuto dall'automa.
 Prima controlla che l'automa sia valido, in caso contrario genera un errore.
 Controlla che l'input sia una lista, altrimenti ritorna NIL.

@@ -107,10 +107,28 @@ Il controllo avviene così:
 Un termine composto con funtore NON riservato (es. foo(bar), test(), nodo(x,y))
 è considerato un simbolo valido dell’alfabeto,
 abbiamo deciso di accettare anche termini composti con zero parametri,
-a patto che il funtore non sia ovviamente riservato (per esempio foo())
+a patto che il funtore non sia ovviamente riservato (per esempio foo() viene accettato)
 
 Questo permette di usare simboli complessi come elementi dell’input,
 non solo atomi semplici.
+
+Nota aggiuntiva:
+Uso di compound_name_arity/3
+
+Per l’analisi dei termini composti viene utilizzato il predicato built-in
+compound_name_arity/3, che permette di estrarre in modo diretto il funtore
+e l’arità di un termine Prolog.
+
+Questo predicato è particolarmente utile perché consente di:
+distinguere in modo chiaro i funtori riservati (c, a, z, o)
+dai simboli normali dell’alfabeto;
+
+inoltre permette di controllare esplicitamente l’arità degli operatori c e a,
+imponendo il vincolo di almeno due argomenti;
+
+gestisce correttamente anche termini composti con arità zero
+(come foo()), che in SWI-Prolog sono considerati termini compound
+con arità 0.
 
 
 LOGICA DI IMPLEMENTAZIONE nfsa_compile_regex/2
@@ -146,7 +164,7 @@ unicità globale.
 Vengono poi salvati con:
 - nfsa_init(FA_Id, Start)
 - nfsa_final(FA_Id, End)
-per tali salvataggio nel database dinamico si usa assertz\1
+per tali salvataggio nel database dinamico si usa assertz\1.
 
 5. Compilazione vera e propria
 La compilazione è delegata al predicato helper compile/4 che costruisce
@@ -222,14 +240,31 @@ il rischio di loop su epsilon sparisce.
 
 GESTIONE DEL DATABASE
 
-- nfsa_delete/1:
-  Cancella tutti i fatti relativi a un automa specifico.
+I predicati nfsa_delete/1 e nfsa_delete_all/0 utilizzano il predicato
+built-in retractall/1 per rimuovere fatti dal database dinamico.
 
-- nfsa_delete_all/0:
-  Cancella tutti gli automi presenti nel database dinamico.
+nfsa_delete(FA_Id) rimuove tutti i fatti relativi all’automa
+identificato da FA_Id, ovvero:
 
-Queste operazioni usano retractall/1 per garantire una pulizia completa
-e coerente della base di conoscenza.
+nfsa_init(FA_Id, _)
+
+nfsa_final(FA_Id, _)
+
+nfsa_delta(FA_Id, _, _, _)
+
+nfsa_delete_all/0 rimuove tutti gli automi, indipendentemente
+dall’identificatore.
+
+Il predicato retractall/1 ha la caratteristica di avere sempre successo,
+anche nel caso in cui non esistano fatti da rimuovere.
+
+Per questo motivo, sia nfsa_delete/1 sia nfsa_delete_all/0
+ritornano sempre true e possono essere utilizzati in modo sicuro
+per ripulire il database senza dover controllare preventivamente
+l’esistenza dell’automa.
+
+Questa scelta semplifica la gestione della ricompilazione degli automi,
+evitando stati inconsistenti o duplicazioni nel database dinamico.
 
 NOTE FINALI
 

@@ -96,13 +96,14 @@
 
     ;; CASO 2: Concatenazione ('c')
     ((eq (first re) 'c)
-     ;; la funzione reduce permette di usare una unica lista per effettuare 
-     ;; la funzione lambda su tutte le chiamate ricorsive della funzione 
-     ;; "compile-recursive"  la funzione lambda concatena l'automa parziale 
+     ;; la funzione reduce permette di restituire una sola lista.
+     ;; Effettua la funzione lambda su tutte le chiamate ricorsive 
+     ;; della funzione "compile-recursive".
+     ;; la funzione lambda concatena l'automa parziale 
      ;; con l'automa del simbolo successivo in particolare crea una lista con:
      ;; stato inizale è lo stato iniziale automa parziale
      ;; stato finale è lo stato finale del'automa da concatenare.
-     ;; con un append mette in un unica lista le transizioni dei 2 e la 
+     ;; con un append mette in un unica lista le transizioni dei 2 pezzi e la 
      ;; epsilon mossa.
      (reduce (lambda (actual-automa concat-automa)
                (list (first actual-automa)
@@ -157,8 +158,8 @@
     ((eq (first re) 'z)
       ;; si usa let* perchè usando let non potrei usare nelle definizioni
       ;; successive quelle create in precedenza perchè con let vengono 
-      ;; create tutte in contemporanea
-      ;; viene creato un automa usando le chiamate ricorsive per analizzare
+      ;; create tutte in contemporanea.
+      ;; Viene creato un automa usando le chiamate ricorsive per analizzare
       ;; ogni simbolo della re
      (let* ((symbol-automa      (compile-recursive (second re)))
             (start-symbol      (first symbol-automa))

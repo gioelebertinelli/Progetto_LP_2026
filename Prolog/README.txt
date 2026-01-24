@@ -1,6 +1,6 @@
-================================================================================
+=============================================================================
                     COMPILATORE REGEX -> NFSA IN PROLOG
-================================================================================
+=============================================================================
 
 DESCRIZIONE:
 
@@ -49,7 +49,7 @@ SCELTE PROGETTUALI IMPORTANTI
 
 - L’alfabeto delle regex è costituito da termini Prolog:
   - tutti gli atomi
-  - tutti i termini composti (compound), a patto che il funtore non sia riservato
+  - tutti i termini composti,a patto che il funtore non sia riservato
 - Alcuni funtori sono riservati e non possono essere usati come simboli:
   c, a, z, o, epsilon
 - epsilon NON è considerato un simbolo dell’alfabeto, ma viene riservato
@@ -104,10 +104,11 @@ Il controllo avviene così:
 - si applica is_regex/1 ricorsivamente a tutti gli argomenti tramite maplist
 
 5. Termini composti non riservati
-Un termine composto con funtore NON riservato (es. foo(bar), test(), nodo(x,y))
+Un termine composto con funtore NON riservato (es. foo(bar), test())
 è considerato un simbolo valido dell’alfabeto,
 abbiamo deciso di accettare anche termini composti con zero parametri,
-a patto che il funtore non sia ovviamente riservato (per esempio foo() viene accettato)
+a patto che il funtore non sia ovviamente riservato 
+(per esempio foo() viene accettato)
 
 Questo permette di usare simboli complessi come elementi dell’input,
 non solo atomi semplici.
@@ -153,7 +154,7 @@ Prima di compilare, si controlla che RE sia una regex valida con is_regex/1.
 Se non lo è, la compilazione fallisce.
 
 3. Gestione del database
-Se esiste già un automa con lo stesso FA_Id, viene cancellato tramite nfsa_delete/1.
+Se esiste già automa con lo stesso FA_Id,viene cancellato con nfsa_delete/1.
 Questo permette di “ricompilare” lo stesso automa senza creare duplicati.
 
 4. Creazione degli stati

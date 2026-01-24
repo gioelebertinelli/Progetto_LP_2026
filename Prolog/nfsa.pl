@@ -174,7 +174,11 @@ compile_seq(Id, [H | T], Start, End) :-
 
 % Alternativa: caso finale (ultima alternativa)
 compile_alt(Id, [H], Start, End) :-
-    compile(Id, H, Start, End).
+    gensym(q, S1),
+    gensym(q, E1),
+    assertz(nfsa_delta(Id, Start, epsilon, S1)),
+    compile(Id, H, S1, E1),
+    assertz(nfsa_delta(Id, E1, epsilon, End)).
 
 % Alternativa: per ogni ramo:
 % Start --eps--> S1

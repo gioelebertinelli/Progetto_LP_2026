@@ -1,8 +1,3 @@
-; Bertinelli	Gioele	923893
-; Gianoli	Matteo	924072
-; Martinalli	Marco	924003
-
-
 ;;; Dichiarazione funzioni per evitare warning in fase di compilazione
 ;;; nel caso venga chiamata prima di essere letta
 (declaim (ftype (function (t t t t t) t) recognize-from-state))
